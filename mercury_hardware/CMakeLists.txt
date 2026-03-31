@@ -21,6 +21,18 @@ file(GLOB python_programs ${PROJECT_NAME}/*.py)
 install(PROGRAMS ${python_programs}
   DESTINATION lib/${PROJECT_NAME})
 
+# Install launch files
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+  FILES_MATCHING PATTERN "*.launch*"
+)
+
+# Install configuration files
+install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+  FILES_MATCHING PATTERN "*"
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
