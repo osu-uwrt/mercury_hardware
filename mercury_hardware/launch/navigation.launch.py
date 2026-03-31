@@ -1,0 +1,145 @@
+import launch
+import xacro
+import traceback
+import os
+from ament_index_python.packages import get_package_share_directory
+from launch.substitutions import PathJoinSubstitution, LaunchConfiguration as LC
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, GroupAction
+from launch_ros.actions import Node, PushRosNamespace
+
+
+def check_zed_xacro(context):
+    use_zed_camera = False
+    zed_xacro_path = ''
+    try:
+        zed_xacro_path = PathJoinSubstitution([
+            get_package_share_directory('zed_wrapper'),
+            'urdf',
+            'zed_descr.urdf.xacro'
+        ]).perform(context)
+
+        use_zed_camera = True
+    except:
+        print("zed_wrapper not found. Launching without zed TF")
+
+    return (str(use_zed_camera), zed_xacro_path)
+
+
+def evaluate_xacro(context, *args, **kwargs):
+    robot = LC('robot').perform(context)
+
+    robot_xacro_path = PathJoinSubstitution([
+        get_package_share_directory('mercury_descriptions'),
+        robot,
+        'xacro',
+        robot + '.xacro'
+    ]).perform(context)
+
+    (use_zed_camera, zed_xacro_path) = check_zed_xacro(context)
+
+    try:
+        robot_description_data = xacro.process_file(robot_xacro_path, mappings={
+                                                    'namespace': robot, 'use_zed_camera': use_zed_camera, 'zed_xacro_path': zed_xacro_path}).toxml()
+
+        robot_state_publisher = Node(
+            name='robot_state_publisher',
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'WARN'],
+            parameters=[
+                {'robot_description': robot_description_data},
+                {'use_tf_static': True}
+            ]
+        )
+
+        return [robot_state_publisher]
+    except Exception as e:
+        print()
+        print("---------------------------------------------")
+        print("COULD NOT OPEN ROBOT DESCRIPTION OR ZED XACRO FILE")
+        print(e)
+        traceback.print_exc()
+        print("---------------------------------------------")
+        print()
+
+    return []
+
+
+def launch_ekf(context, *args, **kwargs):
+    launch_items = []
+
+    if LC("ekf_enabled").perform(context) != "True":
+        return launch_items
+
+    robot = LC("robot").perform(context)
+    ekf_config_name = f"{robot}_ekf.yaml"
+
+    config = os.path.join(
+        get_package_share_directory('mercury_hardware'),
+        'config',
+        ekf_config_name
+    )
+
+    # start robot_localization Extended Kalman filter (EKF)
+    launch_items.append(
+        Node(
+            package='robot_localization',
+            executable='ekf_node',
+            name='ekf_localization_node',
+            output='screen',
+            parameters=[
+                config,
+                {
+                    'reset_on_time_jump': True,
+                }
+            ]
+        )
+    )
+
+    return launch_items
+
+
+def generate_launch_description():
+    return launch.LaunchDescription([
+        # Read in the vehicle's namespace through the command line or use the default value one is not provided
+        DeclareLaunchArgument(
+            "robot",
+            default_value="default_robot",
+            description="Namespace of the vehicle",
+        ),
+
+        DeclareLaunchArgument(
+            "ekf_enabled",
+            default_value="True",
+            description="Enable EKF to estimate robot odometry"
+        ),
+
+
+        GroupAction([
+            PushRosNamespace(
+                LC("robot")
+            ),
+
+            # Publish world and odom as same thing until we get SLAM
+            # This is here so we can compare ground truth from sim to odom
+            Node(
+                name="odom_to_world_broadcaster",
+                package="tf2_ros",
+                executable="static_transform_publisher",
+                arguments=["0", "0", "0", "0", "0", "0", "world", "odom"]
+            ),
+
+            # Node(
+            #     package='mercury_hardware',
+            #     executable='depth_converter.py',
+            #     name='depth_converter',
+            # ),
+
+            # start ekf
+            OpaqueFunction(function=launch_ekf),
+
+            # Publish robot model for Sensor locations
+            OpaqueFunction(function=evaluate_xacro),
+        ], scoped=True)
+    ])
