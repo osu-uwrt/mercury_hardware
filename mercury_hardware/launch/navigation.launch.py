@@ -130,11 +130,11 @@ def generate_launch_description():
                 arguments=["0", "0", "0", "0", "0", "0", "world", "odom"]
             ),
 
-            # Node(
-            #     package='mercury_hardware',
-            #     executable='depth_converter.py',
-            #     name='depth_converter',
-            # ),
+            Node(
+                package='mercury_hardware',
+                executable='depth_converter.py',
+                name='depth_converter',
+            ),
 
             # start ekf
             OpaqueFunction(function=launch_ekf),

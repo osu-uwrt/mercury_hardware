@@ -5,7 +5,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from riptide_msgs2.msg import Depth
+from mercury_msgs.msg import Depth
 import tf2_ros
 import transforms3d as tf3d
 import numpy as np
@@ -32,16 +32,16 @@ class depthConverter(Node):
                 [b2oOrientation.w, b2oOrientation.x, b2oOrientation.y, b2oOrientation.z])[:3, :3]
 
             if self.b2pVector is None:
-                # Offset to pressure sensor
-                pressureOffset = self.tfBuffer.lookup_transform(
-                    self.namespace+'/pressure_link', self.namespace+'/base_link', Time()).transform.translation
-                self.b2pVector = [pressureOffset.x,
-                                  pressureOffset.y, pressureOffset.z]
+                # Offset to depth sensor
+                depthOffset = self.tfBuffer.lookup_transform(
+                    self.namespace+'/depth_link', self.namespace+'/base_link', Time()).transform.translation
+                self.b2pVector = [depthOffset.x,
+                                  depthOffset.y, depthOffset.z]
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as ex:
             self.get_logger().warning(str(ex))
             return
 
-        # Rotate pressure sensor offset into odom frame and get additional depth from offset
+        # Rotate depth sensor offset into odom frame and get additional depth from offset
         # TODO: Calculate uncertainty of this measure
         addedDepth = np.dot(b2oMatrix, self.b2pVector)[2]
 
