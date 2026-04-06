@@ -2,10 +2,40 @@ import launch
 import xacro
 import traceback
 import os
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from launch.substitutions import PathJoinSubstitution, LaunchConfiguration as LC
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, GroupAction
 from launch_ros.actions import Node, PushRosNamespace
+
+
+def get_zed_description(zed_name, zed_type, robot, context, debug):
+    zed_model_path = PathJoinSubstitution([
+        get_package_share_directory('zed_wrapper'),
+        'urdf',
+        'zed_descr.urdf.xacro'
+    ]).perform(context)
+
+    zed_description_data = xacro.process_file(zed_model_path, mappings={
+        'debug': debug,
+        'namespace': robot,
+        'inertial_reference_frame': 'world',
+        'camera_name': f"{robot}/{zed_name}",
+        'camera_model': zed_type
+    }).toxml()
+
+    zed_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        namespace=f"{zed_name}",
+        name='zed_state_publisher',
+        output='screen',
+        parameters=[
+            {'robot_description': zed_description_data},
+            {'use_tf_static': True}
+        ]
+    )
+
+    return zed_state_publisher
 
 
 def check_zed_xacro(context):
@@ -27,6 +57,7 @@ def check_zed_xacro(context):
 
 def evaluate_xacro(context, *args, **kwargs):
     robot = LC('robot').perform(context)
+    debug = False
 
     robot_xacro_path = PathJoinSubstitution([
         get_package_share_directory('mercury_descriptions'),
@@ -38,8 +69,14 @@ def evaluate_xacro(context, *args, **kwargs):
     (use_zed_camera, zed_xacro_path) = check_zed_xacro(context)
 
     try:
-        robot_description_data = xacro.process_file(robot_xacro_path, mappings={
-                                                    'namespace': robot, 'use_zed_camera': use_zed_camera, 'zed_xacro_path': zed_xacro_path}).toxml()
+        robot_description_data = xacro.process_file(
+            robot_xacro_path,
+            mappings={
+                'namespace': robot,
+                'use_zed_camera': use_zed_camera,
+                'zed_xacro_path': zed_xacro_path
+            }
+        ).toxml()
 
         robot_state_publisher = Node(
             name='robot_state_publisher',
@@ -53,7 +90,30 @@ def evaluate_xacro(context, *args, **kwargs):
             ]
         )
 
-        return [robot_state_publisher]
+        nodes = [robot_state_publisher]
+
+        try:
+            nodes.append(get_zed_description("ffc", "zedxm", robot, context, debug))
+
+            nodes.append(
+                Node(
+                    package="tf2_ros",
+                    executable="static_transform_publisher",
+                    name="ffc_to_zed_tf",
+                    arguments=[
+                        "0", "0", "0",
+                        "0", "0", "0",
+                        f"{robot}/ffc_base_link",
+                        f"{robot}/ffc_camera_link",
+                    ],
+                )
+            )
+
+        except PackageNotFoundError:
+            print("zed_wrapper not found. Launching without zed TF")
+
+        return nodes
+
     except Exception as e:
         print()
         print("---------------------------------------------")
