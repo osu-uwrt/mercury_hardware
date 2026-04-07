@@ -145,8 +145,8 @@ def launch_ekf(context, *args, **kwargs):
     launch_items.append(
         Node(
             package='robot_localization',
-            executable='ekf_node',
-            name='ekf_localization_node',
+            executable='ukf_node',
+            name='ukf_localization_node',
             output='screen',
             parameters=[
                 config,
@@ -194,6 +194,12 @@ def generate_launch_description():
                 package='mercury_hardware',
                 executable='depth_converter.py',
                 name='depth_converter',
+            ),
+
+            Node(
+                package='mercury_hardware',
+                executable='zed_odom_converter.py',
+                name='zed_odom_converter',
             ),
 
             # start ekf
