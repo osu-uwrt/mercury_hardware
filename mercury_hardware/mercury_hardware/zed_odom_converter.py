@@ -100,8 +100,14 @@ class ZedOdomToBase(Node):
             Odometry, self.input_topic, self.odom_cb, qos_profile_sensor_data
         )
 
+        # 180 deg yaw: flips X and Y, keeps Z
+        self.R_flip_xy = np.diag([-1.0, -1.0, 1.0])
+        self.T_flip_xy = np.eye(4)
+        self.T_flip_xy[:3, :3] = self.R_flip_xy
+
         self.get_logger().info(
-            f"Republishing {self.input_topic} -> {self.output_topic} as {self.base_frame} odom"
+            f"Republishing {self.input_topic} -> {self.output_topic} as {self.base_frame} odom "
+            "with X/Y sign flip applied"
         )
 
     def odom_cb(self, msg: Odometry):
@@ -136,15 +142,19 @@ class ZedOdomToBase(Node):
         T_camera_base = np.linalg.inv(T_base_camera)
         T_world_base = T_world_camera_fixed @ T_camera_base
 
+        # Blunt patch: flip X and Y signs on the final output transform.
+        T_world_base = self.T_flip_xy @ T_world_base
+
         out = Odometry()
         out.header = msg.header
         out.header.frame_id = self.world_frame
         out.child_frame_id = self.base_frame
         out.pose.pose = matrix_to_pose(T_world_base)
 
-        # Rotate pose covariance into the fixed basis.
+        # Rotate pose covariance into the fixed basis, then apply X/Y flip.
+        pose_cov = rotate_covariance_6x6(msg.pose.covariance, R_base_camera)
         out.pose.covariance = rotate_covariance_6x6(
-            msg.pose.covariance, R_base_camera
+            pose_cov, self.R_flip_xy
         )
 
         # Twist in Odometry is expressed in child_frame_id.
@@ -169,6 +179,10 @@ class ZedOdomToBase(Node):
         # => v_base = v_camera - w_base x p_base_camera
         v_base = v_cam_in_base - np.cross(w_base, p_base_camera)
 
+        # Apply X/Y sign flip to twist as requested.
+        v_base = self.R_flip_xy @ v_base
+        w_base = self.R_flip_xy @ w_base
+
         out.twist.twist.linear.x = float(v_base[0])
         out.twist.twist.linear.y = float(v_base[1])
         out.twist.twist.linear.z = float(v_base[2])
@@ -186,8 +200,11 @@ class ZedOdomToBase(Node):
             cov[35] = self.twist_var_angular
             out.twist.covariance = cov
         else:
-            out.twist.covariance = rotate_covariance_6x6(
+            twist_cov = rotate_covariance_6x6(
                 msg.twist.covariance, R_base_camera
+            )
+            out.twist.covariance = rotate_covariance_6x6(
+                twist_cov, self.R_flip_xy
             )
 
         self.pub.publish(out)
