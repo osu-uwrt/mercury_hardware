@@ -136,7 +136,8 @@ def launch_ekf(context, *args, **kwargs):
         return launch_items
 
     robot = LC("robot").perform(context)
-    ekf_config_name = f"{robot}_ekf.yaml"
+    tag_odom_enabled = LC("tag_odom_enabled").perform(context) == 'True'
+    ekf_config_name = f"{robot}_ekf.yaml" if not tag_odom_enabled else f"{robot}_ekf_tag_odom.yaml"
 
     config = os.path.join(
         get_package_share_directory('mercury_hardware'),
@@ -148,8 +149,8 @@ def launch_ekf(context, *args, **kwargs):
     launch_items.append(
         Node(
             package='robot_localization',
-            executable='ekf_node',
-            name='ekf_localization_node',
+            executable='ukf_node',
+            name='ukf_localization_node',
             output='screen',
             parameters=[
                 config,
@@ -159,6 +160,17 @@ def launch_ekf(context, *args, **kwargs):
             ]
         )
     )
+
+    # start tag odom
+    if tag_odom_enabled:
+        launch_items.append(
+            Node(
+                package='mercury_hardware',
+                executable='tag_odom.py',
+                name='tag_odom',
+                output='screen'
+            )
+        )
 
     return launch_items
 
@@ -176,6 +188,12 @@ def generate_launch_description():
             "ekf_enabled",
             default_value="True",
             description="Enable EKF to estimate robot odometry"
+        ),
+
+        DeclareLaunchArgument(
+            "tag_odom_enabled",
+            default_value="False",
+            description="Enable navigation using the apriltag"
         ),
 
         DeclareLaunchArgument(
@@ -202,6 +220,12 @@ def generate_launch_description():
                 package='mercury_hardware',
                 executable='depth_converter.py',
                 name='depth_converter',
+            ),
+
+            Node(
+                package='mercury_hardware',
+                executable='zed_odom_converter.py',
+                name='zed_odom_converter',
             ),
 
             # start ekf
