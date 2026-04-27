@@ -214,12 +214,6 @@ def generate_launch_description():
                 name='depth_converter',
             ),
 
-            Node(
-                package='mercury_hardware',
-                executable='zed_odom_converter.py',
-                name='zed_odom_converter',
-            ),
-
             # start ekf
             OpaqueFunction(function=launch_ekf),
 
