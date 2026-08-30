@@ -20,10 +20,10 @@ imu_launch_file = os.path.join(
     "launch", "imu.launch.py"
 )
 
-# apriltag_launch_file = os.path.join(
-#     get_package_share_directory('mercury_hardware'),
-#     "launch", "apriltag.launch.py"
-# )
+apriltag_launch_file = os.path.join(
+    get_package_share_directory('mercury_hardware'),
+    "launch", "apriltag.launch.py"
+)
 
 def generate_launch_description():
     return LaunchDescription([
@@ -46,11 +46,11 @@ def generate_launch_description():
                     ('robot', LC('robot'))
                 ]
             ),
-            # IncludeLaunchDescription(
-            #     AnyLaunchDescriptionSource(apriltag_launch_file),
-            #     launch_arguments=[
-            #         ('robot', LC('robot')),
-            #     ]
-            # ),
+            IncludeLaunchDescription(
+                AnyLaunchDescriptionSource(apriltag_launch_file),
+                launch_arguments=[
+                    ('robot', LC('robot')),
+                ]
+            ),
         ], scoped=True)
     ])
