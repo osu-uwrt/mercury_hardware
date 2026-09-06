@@ -68,13 +68,16 @@ def evaluate_xacro(context, *args, **kwargs):
 
     (use_zed_camera, zed_xacro_path) = check_zed_xacro(context)
 
+    sim_enabled = LC('sim_enabled').perform(context)
+
     try:
         robot_description_data = xacro.process_file(
             robot_xacro_path,
             mappings={
                 'namespace': robot,
                 'use_zed_camera': use_zed_camera,
-                'zed_xacro_path': zed_xacro_path
+                'zed_xacro_path': zed_xacro_path,
+                'sim_enabled' : sim_enabled
             }
         ).toxml()
 
@@ -193,6 +196,11 @@ def generate_launch_description():
             description="Enable navigation using the apriltag"
         ),
 
+        DeclareLaunchArgument(
+            "sim_enabled",
+            default_value="False",
+            description="Enable sim to read proper xacro"
+        ),
 
         GroupAction([
             PushRosNamespace(
